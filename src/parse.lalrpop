@@ -1,0 +1,91 @@
+use crate::ait::{ast, quarry};
+
+grammar;
+
+//  Macros
+
+Keyword<T>: T = "." <t:T> => t;
+
+Semi<T>: Vec<T> = {
+    <mut v:(<T> ";")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+
+// Utils
+
+Ident: String = {
+    r"[a-zA-Z][a-zA-Z0-9]+" => String::from(<>)
+};
+
+FuncIdent: String = {
+    "@" <i:Ident> => i
+};
+
+QuarryName: String = {
+    Keyword<"quarry"> <i:Ident> => i
+};
+
+I: i32 = {
+    r"[0-9]+" => <>.parse().unwrap()
+};
+
+// Ast
+
+Num: i32 = {
+    I
+};
+
+Str: String = {
+    "\"" <Ident> "\""
+};
+
+Const: ast::Constant = {
+    Num => ast::Constant::Int(<>),
+    Str => ast::Constant::Str(<>)
+};
+
+ConstantRef: i32 = {
+    "#" <I>
+};
+
+Expr: ast::Expr = {
+    Num => ast::Expr::Int(<>),
+    Str => ast::Expr::Str(<>),
+    ConstantRef  => ast::Expr::Constant(<>)
+};
+
+ConstantDefinition: ast::ConstantDefinition = {
+    Keyword<"const"> <I> <Const> => ast::ConstantDefinition::new(<>)
+};
+
+Ty: ast::Ty = {
+    "s" => ast::Ty::String,
+    "i" => ast::Ty::Int
+};
+
+StackEffect: ast::StackEffect = {
+    <Semi<Ty>> "--" <Semi<Ty>> => ast::StackEffect::new(<>)
+};
+
+Instruction: ast::Instruction = {
+    <Ident> <Expr?> => ast::Instruction::new(<>)
+};
+
+FunctionDefinition: ast::FunctionDefinition = {
+    Keyword<"func"> "(" <eff:StackEffect> ")" <name:FuncIdent> "[" <instrs:Semi<Instruction>> "]"
+    => ast::FunctionDefinition::new(name, eff, instrs)
+};
+
+Ast: ast::Ast = {
+    <FunctionDefinition> => ast::Ast::Function(<>),
+    <ConstantDefinition> => ast::Ast::Constant(<>)
+};
+
+pub Quarry: quarry::Quarry = {
+    <QuarryName> <Ast*> => quarry::Quarry::new(<>)
+}
